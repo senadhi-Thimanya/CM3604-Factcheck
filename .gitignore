@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.ipynb_checkpoints/
+.idea/
+.vscode/
+.DS_Store
+# cached model outputs and logs (regenerate locally)
+experiments/cache/
+experiments/*.log
+# HuggingFace model cache
+.cache/
