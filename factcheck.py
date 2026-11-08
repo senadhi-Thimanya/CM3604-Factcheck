@@ -133,7 +133,7 @@ class EntailmentFactChecker(FactChecker):
         self.nlp = spacy.blank("en")
         self.nlp.add_pipe("sentencizer")
 
-        self.entailment_threshold = 0.50
+        self.entailment_threshold = 0.34
 
     def predict(self, fact: str, passages: List[dict]) -> str:
 
