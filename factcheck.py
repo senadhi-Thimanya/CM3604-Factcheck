@@ -26,34 +26,71 @@ class FactExample(object):
         return repr("fact=" + repr(self.fact) + "; label=" + repr(self.label) + "; passages=" + repr(self.passages))
 
 
+
 class EntailmentModel(object):
     def __init__(self, model, tokenizer, cuda=False):
         self.model = model
         self.tokenizer = tokenizer
         self.cuda = cuda
 
+        self.model.eval()
+        self.id2label = self.model.config.id2label
+
     def check_entailment(self, premise: str, hypothesis: str):
-        with torch.no_grad():
-            # Tokenize the premise and hypothesis
-            inputs = self.tokenizer(premise, hypothesis, return_tensors='pt', truncation=True, padding=True)
+        with torch.inference_mode():
+
+            # Tokenize the evidence and the fact
+            inputs = self.tokenizer(
+                premise,
+                hypothesis,
+                return_tensors='pt',
+                truncation=True,
+                max_length=512
+            )
+
+            # Move inputs to GPU if CUDA is enabled
             if self.cuda:
-                inputs = {key: value.to('cuda') for key, value in inputs.items()}
-            # Get the model's prediction
+                inputs = {
+                    key: value.to('cuda')
+                    for key, value in inputs.items()
+                }
+
+            # Run the NLI model
             outputs = self.model(**inputs)
-            logits = outputs.logits
 
-        # Note that the labels are ["entailment", "neutral", "contradiction"]. There are a number of ways to map
-        # these logits or probabilities to classification decisions; you'll have to decide how you want to do this.
+            # Convert logits into probabilities
+            probabilities = torch.softmax(
+                outputs.logits, dim=-1
+            )[0].cpu().tolist()
 
-        raise Exception("Not implemented")
+        # Map model output indices to their labels
+        label_mapping = {}
 
-        # To prevent out-of-memory (OOM) issues during autograding, we explicitly delete
-        # objects inputs, outputs, logits, and any results that are no longer needed after the computation.
-        del inputs, outputs, logits
+        for index, label in self.id2label.items():
+            label = label.lower()
+
+            if "entailment" in label:
+                label_mapping["entailment"] = int(index)
+            elif "neutral" in label:
+                label_mapping["neutral"] = int(index)
+            elif "contradiction" in label:
+                label_mapping["contradiction"] = int(index)
+
+        if len(label_mapping) != 3:
+            raise ValueError(
+                f"Unexpected model labels: {self.id2label}"
+            )
+
+        # Return probabilities using meaningful class names
+        result = {
+            label: float(probabilities[index])
+            for label, index in label_mapping.items()
+        }
+
+        del inputs, outputs
         gc.collect()
 
-        # return something
-
+        return result
 
 class FactChecker(object):
     """
@@ -86,12 +123,60 @@ class WordRecallThresholdFactChecker(FactChecker):
         raise Exception("Implement me")
 
 
+
 class EntailmentFactChecker(FactChecker):
+
     def __init__(self, ent_model):
         self.ent_model = ent_model
 
+        # Lightweight sentence splitter
+        self.nlp = spacy.blank("en")
+        self.nlp.add_pipe("sentencizer")
+
+        self.entailment_threshold = 0.50
+
     def predict(self, fact: str, passages: List[dict]) -> str:
-        raise Exception("Implement me")
+
+        max_entailment_score = 0.0
+
+        # Examine each retrieved passage
+        for passage in passages:
+
+            passage_text = passage.get("text", "")
+
+            if not passage_text or not passage_text.strip():
+                continue
+
+            # Split passage into individual sentences
+            doc = self.nlp(passage_text)
+
+            sentences = [
+                sentence.text.strip()
+                for sentence in doc.sents
+                if sentence.text.strip()
+            ]
+
+            # Check whether any sentence supports the fact
+            for sentence in sentences:
+
+                result = self.ent_model.check_entailment(
+                    premise=sentence,
+                    hypothesis=fact
+                )
+
+                entailment_score = result["entailment"]
+
+                max_entailment_score = max(
+                    max_entailment_score,
+                    entailment_score
+                )
+
+        # Make the final binary prediction
+        if max_entailment_score >= self.entailment_threshold:
+            return "S"
+
+        return "NS"
+
 
 
 # OPTIONAL
