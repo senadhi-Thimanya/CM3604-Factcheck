@@ -1,0 +1,31 @@
+Loading dataset...
+Loaded 221 examples.
+
+Loading DeBERTa model...
+Using device: cpu
+
+Calculating entailment scores...
+
+DECISION RULE COMPARISON
+===========================================================================
+Rule                    Threshold   Accuracy    S F1      NS F1     
+---------------------------------------------------------------------------
+Max entailment prob     0.34        0.8552      0.8545    0.8559    
+Discrete argmax         n/a         0.8462      0.8411    0.8509    
+Entail - contradict     0.34        0.8552      0.8532    0.8571    
+
+Confusion matrices [[TP, FN], [FP, TN]]:
+
+Max entailment prob:
+[[94 18]
+ [14 95]]
+
+Discrete argmax:
+[[90 22]
+ [12 97]]
+
+Entail - contradict:
+[[93 19]
+ [13 96]]
+
+Decision rule comparison completed.
