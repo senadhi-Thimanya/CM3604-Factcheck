@@ -17,6 +17,7 @@ Record every experiment so the report can justify each design decision. One row 
 | 2026-11-09 | Tharuka | Single sentences (spaCy sentencizer) | None | Max (entail - contradict) | 0.34 (swept -0.99 to 0.99) | 0.8552 | same run | TP 93, FN 19, FP 13, TN 96 |
 | 2026-11-10 | Tharuka | Single sentences (spaCy sentencizer) | 0.00-0.60 sweep (sentence-level overlap precision) | Max entailment prob | 0.34 | 0.8552 at 0.00; 0.8462 for 0.05-0.20; 0.8371 at 0.25; 0.8235 at 0.30 | Estimated from model time per call: 490 s at 0.00, 137 s at 0.20 (3.57x) | 0.20 skips 72.3% of sentences (1,484 of 5,354 checked). Output: `experiments/pruning_sweep.txt` |
 | 2026-11-10 | Tharuka | Single sentences (spaCy sentencizer) | 0.20 (chosen) | Max entailment prob | 0.34 | 0.8462 (187/221) | CPU, 143 s vs 517 s unpruned (3.6x) | Real `factchecking_main.py` run. TP 88, FN 24, FP 10, TN 99. Fewer FP, more FN than unpruned |
+| 2026-11-10 | Tharuka | Single sentences, `<s>`/`</s>` tags removed before splitting | 0.20 | Max entailment prob | 0.34 | 0.8235 (182/221) | CPU, 153 s | Rejected: below 83% and 2.3 points worse than keeping tags. TP 85, FN 27, FP 12, TN 97. Threshold not re-tuned for this setting |
 
 ## Limitations to mention in the report
 - Threshold tuned on the same dev set it is evaluated on (the brief allows this; there is no separate test set).
