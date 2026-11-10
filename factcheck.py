@@ -236,6 +236,14 @@ class EntailmentFactChecker(FactChecker):
 
         self.entailment_threshold = 0.34
 
+        # Skip sentences whose word overlap with the fact is below this
+        # (0.0 = pruning off)
+        self.pruning_cutoff = 0.2
+
+        # Counts how many sentences went to the model vs. were pruned
+        self.checked_count = 0
+        self.skipped_count = 0
+
     def predict(self, fact: str, passages: List[dict]) -> str:
 
         max_entailment_score = 0.0
@@ -259,6 +267,13 @@ class EntailmentFactChecker(FactChecker):
 
             # Check whether any sentence supports the fact
             for sentence in sentences:
+
+                # Prune: very low word overlap means entailment is unlikely
+                if overlap_score(fact, sentence) < self.pruning_cutoff:
+                    self.skipped_count += 1
+                    continue
+
+                self.checked_count += 1
 
                 result = self.ent_model.check_entailment(
                     premise=sentence,
