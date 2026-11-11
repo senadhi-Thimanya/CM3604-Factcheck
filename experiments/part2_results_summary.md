@@ -18,7 +18,7 @@ All numbers are on the 221 dev facts (S = 112, NS + IR = 109). Runs were on CPU 
 | NS precision / recall / F1 | 0.8291 / 0.8899 / 0.8584 |
 | CPU runtime | 170 s (517 s without pruning, about 3x faster) |
 
-`check_submission.sh` also passed in a fresh Python 3.10 env (on the earlier 10 Nov version).
+`check_submission.sh` passes on this version in a fresh Python 3.10 env (word overlap 0.8190, entailment 0.8552).
 
 ## Baselines
 

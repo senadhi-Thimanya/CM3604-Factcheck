@@ -66,7 +66,7 @@ Working notes for the report. All numbers are on the 221 dev facts (S = 112, NS 
 - [x] Both run on CPU without errors or out-of-memory problems
 - [x] `factchecking_main.py` unchanged
 - [x] Python 3.10 + pinned packages only
-- [ ] Rerun `check_submission.sh` on the final `factcheck.py` (last pass was the 10 Nov version)
+- [x] `check_submission.sh` passes on the final `factcheck.py` in a fresh Python 3.10 env (11 Nov: 0.8190 / 0.8552)
 - [ ] Part 3: 10 FP + 10 FN examined and categorised into 2-4 categories (error lists ready, labelling not done)
 - [ ] Part 3: category definitions, aggregate statistics, 3 detailed examples
 - [ ] PDF report written
