@@ -4,7 +4,7 @@ import torch
 from typing import List
 import numpy as np
 import spacy
-import gc
+import re
 
 
 class FactExample(object):
@@ -36,6 +36,23 @@ class EntailmentModel(object):
         self.model.eval()
         self.id2label = self.model.config.id2label
 
+        # Build the label mapping ONCE here, not on every call
+        self.label_mapping = {}
+        for index, label in self.id2label.items():
+            label = label.lower()
+
+            if "entailment" in label:
+                self.label_mapping["entailment"] = int(index)
+            elif "neutral" in label:
+                self.label_mapping["neutral"] = int(index)
+            elif "contradiction" in label:
+                self.label_mapping["contradiction"] = int(index)
+
+        if len(self.label_mapping) != 3:
+            raise ValueError(
+                f"Unexpected model labels: {self.id2label}"
+            )
+
     def check_entailment(self, premise: str, hypothesis: str):
         with torch.inference_mode():
 
@@ -63,35 +80,11 @@ class EntailmentModel(object):
                 outputs.logits, dim=-1
             )[0].cpu().tolist()
 
-        # Map model output indices to their labels
-        label_mapping = {}
-
-        for index, label in self.id2label.items():
-            label = label.lower()
-
-            if "entailment" in label:
-                label_mapping["entailment"] = int(index)
-            elif "neutral" in label:
-                label_mapping["neutral"] = int(index)
-            elif "contradiction" in label:
-                label_mapping["contradiction"] = int(index)
-
-        if len(label_mapping) != 3:
-            raise ValueError(
-                f"Unexpected model labels: {self.id2label}"
-            )
-
         # Return probabilities using meaningful class names
-        result = {
+        return {
             label: float(probabilities[index])
-            for label, index in label_mapping.items()
+            for label, index in self.label_mapping.items()
         }
-
-        del inputs, outputs
-        gc.collect()
-
-        return result
-
 class FactChecker(object):
     """
     Fact checker base type
@@ -129,56 +122,59 @@ class EntailmentFactChecker(FactChecker):
     def __init__(self, ent_model):
         self.ent_model = ent_model
 
-        # Lightweight sentence splitter
+        # Lightweight sentence splitter (no model download needed)
         self.nlp = spacy.blank("en")
         self.nlp.add_pipe("sentencizer")
 
-        self.entailment_threshold = 0.34
+        self.entailment_threshold = 0.36
 
-    def predict(self, fact: str, passages: List[dict]) -> str:
+        # Sentences sharing less than this fraction of the fact's words are skipped
+        self.overlap_cutoff = 0.1
 
-        max_entailment_score = 0.0
+    def _words(self, text: str):
+        # Lowercase and strip punctuation so "Paris," matches "paris"
+        return set(re.findall(r"[a-z0-9]+", text.lower()))
 
-        # Examine each retrieved passage
+    def _overlap(self, fact: str, sentence: str) -> float:
+        fact_words = self._words(fact)
+        sent_words = self._words(sentence)
+        return len(fact_words & sent_words) / max(len(fact_words), 1)
+
+    def max_entailment_score(self, fact: str, passages: List[dict],
+                             return_sentence: bool = False):
+        best_score = 0.0
+        best_sentence = ""
+
         for passage in passages:
-
             passage_text = passage.get("text", "")
-
             if not passage_text or not passage_text.strip():
                 continue
 
-            # Split passage into individual sentences
-            doc = self.nlp(passage_text)
+            for sent in self.nlp(passage_text).sents:
+                sentence = sent.text.strip()
+                if not sentence:
+                    continue
 
-            sentences = [
-                sentence.text.strip()
-                for sentence in doc.sents
-                if sentence.text.strip()
-            ]
+                # Pruning: skip sentences with almost no word overlap
+                if self._overlap(fact, sentence) < self.overlap_cutoff:
+                    continue
 
-            # Check whether any sentence supports the fact
-            for sentence in sentences:
-
-                result = self.ent_model.check_entailment(
+                score = self.ent_model.check_entailment(
                     premise=sentence,
                     hypothesis=fact
-                )
+                )["entailment"]
 
-                entailment_score = result["entailment"]
+                if score > best_score:
+                    best_score = score
+                    best_sentence = sentence
 
-                max_entailment_score = max(
-                    max_entailment_score,
-                    entailment_score
-                )
+        if return_sentence:
+            return best_score, best_sentence
+        return best_score
 
-        # Make the final binary prediction
-        if max_entailment_score >= self.entailment_threshold:
-            return "S"
-
-        return "NS"
-
-
-
+    def predict(self, fact: str, passages: List[dict]) -> str:
+        score = self.max_entailment_score(fact, passages)
+        return "S" if score >= self.entailment_threshold else "NS"
 # OPTIONAL
 class DependencyRecallThresholdFactChecker(FactChecker):
     def __init__(self):
