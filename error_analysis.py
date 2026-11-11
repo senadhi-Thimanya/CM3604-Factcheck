@@ -24,7 +24,7 @@ import torch
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
-from factcheck import EntailmentModel, EntailmentFactChecker
+from factcheck import EntailmentModel, EntailmentFactChecker, remove_noise
 from factchecking_main import read_passages, read_fact_examples
 
 
@@ -64,6 +64,8 @@ def split_passage(checker, passage):
     text = passage.get("text", "")
     if not text or not text.strip():
         return []
+    if checker.clean_text:                      # same text handling as the checker itself
+        text = remove_noise(text)
     return [s.text.strip() for s in checker.nlp(text).sents if s.text.strip()]
 
 
