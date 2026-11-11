@@ -1,0 +1,41 @@
+fact,gold_label,score,prediction,error_type
+Marianne McAndrew is an American.,NS,1.000,S,FP
+Marianne McAndrew is a singer.,NS,0.667,S,FP
+Cleveland is in Ohio.,IR,1.000,S,FP
+"Gerhard Fischer invented the first handheld, battery-operated metal detector.",S,0.556,NS,FN
+The Fischer Research Laboratory was founded in 1936.,NS,0.800,S,FP
+Jean Daullé was a printmaker.,NS,0.667,S,FP
+Jean Daullé was known for his portraits.,S,0.500,NS,FN
+He moved to Dutch club FC Groningen.,S,0.600,NS,FN
+Trivisonno worked at WMMS.,NS,0.667,S,FP
+Trivisonno worked at WKNR.,NS,1.000,S,FP
+He served for many years as a pastor.,S,0.500,NS,FN
+Hibo Wardere is based in the United Kingdom.,S,0.400,NS,FN
+She has worked to educate communities about the dangers of FGM.,S,0.600,NS,FN
+She has worked to promote the elimination of FGM.,S,0.500,NS,FN
+Nisar Ahmad Kakru was Kashmiri.,NS,0.750,S,FP
+Mayo Clinic is an organization.,NS,0.667,S,FP
+He has worked at Mayo Clinic.,NS,0.667,S,FP
+Furlong joined in 1995.,NS,0.667,S,FP
+He served as a sniper.,NS,1.000,S,FP
+"She was born on July 18, 1987.",S,0.500,NS,FN
+"With CSKA, he won domestic titles.",S,0.333,NS,FN
+"With CSKA, he won three Russian Premier League titles.",NS,0.667,S,FP
+Florencia Bertotti is a television host.,NS,0.750,S,FP
+"Jonathan Haagensen was born on February 3, 1982.",NS,0.667,S,FP
+Rio de Janeiro is in Brazil.,S,0.250,NS,FN
+Haagensen began his acting career in theater.,S,0.400,NS,FN
+Haagensen later transitioned to television.,S,0.250,NS,FN
+Haagensen later transitioned to film.,S,0.500,NS,FN
+Kerser is from Sydney.,NS,1.000,S,FP
+Botak Chin is also known as Chin Peng.,NS,0.750,S,FP
+Botak Chin was a communist.,NS,0.667,S,FP
+Botak Chin was a revolutionary.,NS,0.667,S,FP
+Shahnaz married in 1959.,NS,0.667,S,FP
+They divorced in 1964.,S,0.000,NS,FN
+Jidenna's music is a fusion of hip-hop.,NS,0.800,S,FP
+Jidenna's music is a fusion of R&B.,NS,0.800,S,FP
+He often incorporates African elements into his style.,S,0.400,NS,FN
+He often incorporates African elements into his fashion.,S,0.400,NS,FN
+He has since then starred in numerous dramas.,S,0.500,NS,FN
+He has since then starred in numerous films.,S,0.500,NS,FN
