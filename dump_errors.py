@@ -6,7 +6,7 @@ import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from tqdm import tqdm
 
-from factcheck import EntailmentModel, EntailmentFactChecker, overlap_score
+from factcheck import EntailmentModel, EntailmentFactChecker, clean_passage
 from factchecking_main import read_passages, read_fact_examples
 
 
@@ -59,7 +59,8 @@ checker = EntailmentFactChecker(ent_model)
 
 print(
     f"Threshold: {checker.entailment_threshold}, "
-    f"pruning cutoff: {checker.pruning_cutoff}"
+    f"pruning cutoff: {checker.overlap_cutoff} ({checker.overlap_method}), "
+    f"clean text: {checker.clean_text}"
 )
 
 
@@ -83,6 +84,9 @@ for example in tqdm(examples):
         if not passage_text or not passage_text.strip():
             continue
 
+        if checker.clean_text:
+            passage_text = clean_passage(passage_text)
+
         doc = checker.nlp(passage_text)
 
         for sentence in doc.sents:
@@ -92,7 +96,7 @@ for example in tqdm(examples):
             if not sentence_text:
                 continue
 
-            if overlap_score(example.fact, sentence_text) < checker.pruning_cutoff:
+            if checker._overlap(example.fact, sentence_text) < checker.overlap_cutoff:
                 continue
 
             result = ent_model.check_entailment(
@@ -126,7 +130,7 @@ for example in tqdm(examples):
             "contradiction": round(best_probs["contradiction"], 4) if best_probs else "",
             "best_sentence": best_sentence,
             "best_sentence_overlap": (
-                round(overlap_score(example.fact, best_sentence), 4)
+                round(checker._overlap(example.fact, best_sentence), 4)
                 if best_sentence else ""
             ),
             "your_category": "",
