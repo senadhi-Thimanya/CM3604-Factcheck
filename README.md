@@ -55,6 +55,3 @@ Do not commit `venv/` or `.venv/` (they are git-ignored).
 2. `factcheck.py` must work with the pinned packages only, on CPU as well as GPU, without errors or out-of-memory problems.
 3. Before submitting, run `scripts/check_submission.ps1` (Windows) or `scripts/check_submission.sh` in a fresh Python 3.10
    environment. It must print 0.8190 and 0.8552.
-4. **GenAI:** the assessment is in the "Editing" category. Each member's use of GenAI is declared in the report's
-   acknowledgement section, using the template in the assessment brief.
-5. Everyone must be able to explain every part of the code and the report.
