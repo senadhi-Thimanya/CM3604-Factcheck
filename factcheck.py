@@ -341,7 +341,7 @@ class DependencyRecallThresholdFactChecker(FactChecker):
         :param sent: The sentence to extract dependencies from
         :param nlp: The spaCy model to run
         :return: A set of dependency relations as tuples (head, label, child) where the head and child are lemmatized
-        if they are verbs. This is filtered from the entire set of dependencies to reflect ones that are most
+        if they are verbs. This is filtered from the entire set of dependencies to  reflect ones that are most
         semantically meaningful for this kind of fact-checking
         """
         # Runs the spaCy tagger
