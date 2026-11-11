@@ -4,7 +4,6 @@ import torch
 from typing import List
 import numpy as np
 import spacy
-import gc
 import re
 from nltk.stem import PorterStemmer
 
@@ -28,7 +27,6 @@ class FactExample(object):
         return repr("fact=" + repr(self.fact) + "; label=" + repr(self.label) + "; passages=" + repr(self.passages))
 
 
-
 class EntailmentModel(object):
     def __init__(self, model, tokenizer, cuda=False):
         self.model = model
@@ -38,10 +36,27 @@ class EntailmentModel(object):
         self.model.eval()
         self.id2label = self.model.config.id2label
 
+        # Build the label mapping ONCE here, not on every call
+        self.label_mapping = {}
+        for index, label in self.id2label.items():
+            label = label.lower()
+
+            if "entailment" in label:
+                self.label_mapping["entailment"] = int(index)
+            elif "neutral" in label:
+                self.label_mapping["neutral"] = int(index)
+            elif "contradiction" in label:
+                self.label_mapping["contradiction"] = int(index)
+
+        if len(self.label_mapping) != 3:
+            raise ValueError(
+                f"Unexpected model labels: {self.id2label}"
+            )
+
     def check_entailment(self, premise: str, hypothesis: str):
         with torch.inference_mode():
 
-            # Tokenize the evidence and the fact
+            # Tokenize the evidence (premise) and the fact (hypothesis)
             inputs = self.tokenizer(
                 premise,
                 hypothesis,
@@ -50,12 +65,9 @@ class EntailmentModel(object):
                 max_length=512
             )
 
-            # Move inputs to GPU if CUDA is enabled
-            if self.cuda:
-                inputs = {
-                    key: value.to('cuda')
-                    for key, value in inputs.items()
-                }
+            # Move inputs to the same device as the model (GPU or CPU)
+            device = self.model.device
+            inputs = {key: value.to(device) for key, value in inputs.items()}
 
             # Run the NLI model
             outputs = self.model(**inputs)
@@ -65,34 +77,12 @@ class EntailmentModel(object):
                 outputs.logits, dim=-1
             )[0].cpu().tolist()
 
-        # Map model output indices to their labels
-        label_mapping = {}
-
-        for index, label in self.id2label.items():
-            label = label.lower()
-
-            if "entailment" in label:
-                label_mapping["entailment"] = int(index)
-            elif "neutral" in label:
-                label_mapping["neutral"] = int(index)
-            elif "contradiction" in label:
-                label_mapping["contradiction"] = int(index)
-
-        if len(label_mapping) != 3:
-            raise ValueError(
-                f"Unexpected model labels: {self.id2label}"
-            )
-
         # Return probabilities using meaningful class names
-        result = {
+        return {
             label: float(probabilities[index])
-            for label, index in label_mapping.items()
+            for label, index in self.label_mapping.items()
         }
 
-        del inputs, outputs
-        gc.collect()
-
-        return result
 
 class FactChecker(object):
     """
@@ -224,75 +214,106 @@ class WordRecallThresholdFactChecker(FactChecker):
         return "S" if self.score(fact, passages) >= self.threshold else "NS"
 
 
+# ---------------------------------------------------------------------------
+# Part 2: textual entailment
+# ---------------------------------------------------------------------------
+
+_SPACE_RE = re.compile(r"\s+")
+_SENTENCE_TAG_RE = re.compile(r"</?s>")     # kept separate so Part 2 does not depend on Part 1 code
+
+
+def clean_passage(text: str) -> str:
+    """
+    Noise removal for retrieved passages: drops the <s> / </s> sentence tags and collapses
+    newlines and repeated spaces, so the sentence splitter and the NLI model see plain text.
+    """
+    text = _SENTENCE_TAG_RE.sub(" ", text)
+    return _SPACE_RE.sub(" ", text).strip()
+
 
 class EntailmentFactChecker(FactChecker):
+    """
+    Predicts S when the best entailment probability over all sentences of all retrieved passages
+    reaches a threshold. Sentences with very low word overlap with the fact are pruned (skipped).
+    """
 
-    def __init__(self, ent_model):
+    def __init__(self, ent_model, entailment_threshold: float = 0.36, overlap_cutoff: float = 0.1,
+                 overlap_method: str = "simple", clean_text: bool = False):
         self.ent_model = ent_model
 
-        # Lightweight sentence splitter
+        # Lightweight rule-based sentence splitter (no model download needed)
         self.nlp = spacy.blank("en")
         self.nlp.add_pipe("sentencizer")
 
-        self.entailment_threshold = 0.34
+        # Predict S when the best entailment probability is at least this value
+        self.entailment_threshold = entailment_threshold
 
-        # Skip sentences whose word overlap with the fact is below this
-        # (0.0 = pruning off)
-        self.pruning_cutoff = 0.2
+        # Skip sentences whose word overlap with the fact is below this (0.0 = pruning off)
+        self.overlap_cutoff = overlap_cutoff
 
-        # Counts how many sentences went to the model vs. were pruned
+        # "simple":  share of the fact's lower-cased words that appear in the sentence
+        # "content": the Part 1 overlap (stop words removed, stemmed)
+        self.overlap_method = overlap_method
+
+        # Remove <s> tags and extra whitespace before splitting into sentences.
+        # Off by default: with the 0.36 threshold it scored 183/221 (82.8%) against 189/221 (85.5%) on raw text.
+        self.clean_text = clean_text
+
+        # How many sentences went to the model and how many were pruned
         self.checked_count = 0
         self.skipped_count = 0
 
-    def predict(self, fact: str, passages: List[dict]) -> str:
+    def _overlap(self, fact: str, sentence: str) -> float:
+        if self.overlap_method == "content":
+            fact_tokens = preprocess(fact)
+            if not fact_tokens:          # fact made only of stop words: do not prune
+                return 1.0
+            return overlap_from_tokens(fact_tokens, preprocess(sentence), "precision")
 
-        max_entailment_score = 0.0
+        fact_words = set(re.findall(r"[a-z0-9]+", fact.lower()))
+        sent_words = set(re.findall(r"[a-z0-9]+", sentence.lower()))
+        return len(fact_words & sent_words) / max(len(fact_words), 1)
 
-        # Examine each retrieved passage
+    def max_entailment_score(self, fact: str, passages: List[dict], return_sentence: bool = False):
+        best_score = 0.0
+        best_sentence = ""
+
         for passage in passages:
-
             passage_text = passage.get("text", "")
-
             if not passage_text or not passage_text.strip():
                 continue
 
-            # Split passage into individual sentences
-            doc = self.nlp(passage_text)
+            if self.clean_text:
+                passage_text = clean_passage(passage_text)
 
-            sentences = [
-                sentence.text.strip()
-                for sentence in doc.sents
-                if sentence.text.strip()
-            ]
+            for sent in self.nlp(passage_text).sents:
+                sentence = sent.text.strip()
+                if not sentence:
+                    continue
 
-            # Check whether any sentence supports the fact
-            for sentence in sentences:
-
-                # Prune: very low word overlap means entailment is unlikely
-                if overlap_score(fact, sentence) < self.pruning_cutoff:
+                # Pruning: very low word overlap means entailment is very unlikely
+                if self._overlap(fact, sentence) < self.overlap_cutoff:
                     self.skipped_count += 1
                     continue
 
                 self.checked_count += 1
 
-                result = self.ent_model.check_entailment(
+                score = self.ent_model.check_entailment(
                     premise=sentence,
                     hypothesis=fact
-                )
+                )["entailment"]
 
-                entailment_score = result["entailment"]
+                if score > best_score:
+                    best_score = score
+                    best_sentence = sentence
 
-                max_entailment_score = max(
-                    max_entailment_score,
-                    entailment_score
-                )
+        if return_sentence:
+            return best_score, best_sentence
+        return best_score
 
-        # Make the final binary prediction
-        if max_entailment_score >= self.entailment_threshold:
-            return "S"
-
-        return "NS"
-
+    def predict(self, fact: str, passages: List[dict]) -> str:
+        score = self.max_entailment_score(fact, passages)
+        return "S" if score >= self.entailment_threshold else "NS"
 
 
 # OPTIONAL
