@@ -243,7 +243,7 @@ def remove_noise(text: str) -> str:
 class EntailmentFactChecker(FactChecker):
     """
     Predicts S when the best entailment probability over all sentences of all retrieved passages
-    reaches a threshold. Sentences with very low word overlap with the fact are pruned (skipped).
+    reaches a threshold. Sentences with very low word overlap with the fact are pruned  (skipped).
     """
 
     def __init__(self, ent_model, entailment_threshold: float = 0.36, overlap_cutoff: float = 0.1,
