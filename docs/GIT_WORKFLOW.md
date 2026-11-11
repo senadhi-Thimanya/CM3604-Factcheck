@@ -1,34 +1,27 @@
 # Git workflow
 
-## Branches
-| Member | Role | Branch |
-|---|---|---|
-| A | Word overlap lead (Part 1) | `a/word-overlap` |
-| B | Entailment model lead (Part 2, model side) | `b/entailment-model` |
-| C | Entailment pipeline and tuning (Part 2, data side) | `c/pipeline` |
-| D | Analysis and report lead (Part 3) | `d/report` |
+## Branches (as used)
+| Branch | Content |
+|---|---|
+| `word-overlap` | Part 1: preprocessing, overlap scoring, ablation scripts |
+| `metrics-and-evaluation-harness` | Part 1: TF-IDF / ROUGE comparison and the evaluation harness |
+| `text-entailment` | Part 2: entailment model inference and decision rule |
+| `pruning` | Part 2: pruning, final `EntailmentFactChecker`, experiments |
 
-`main` always runs. Nobody commits to `main` directly.
+`main` must always run both modes. The final `factcheck.py` is the version on `pruning` (it equals the one on `text-entailment`).
 
-## Day to day
-```bash
-git checkout main && git pull
-git checkout -b a/word-overlap          # once
-# ... work, then:
-git add -p && git commit -m "word_overlap: add Jaccard scorer"
-git pull --rebase origin main
-git push -u origin a/word-overlap       # open a pull request into main
+## Rules
+- Work on a branch, merge into `main` through a pull request that a teammate has reviewed.
+- Never commit `venv/` or `.venv/`, model caches, or large generated files. Check `git status` before every commit.
+- Never merge a version of `factcheck.py` that still contains the duplicated Part 1 block (it should be about 347 lines, not 447).
+- After every merge into `main`, run `scripts/check_submission.ps1` (or `.sh`) and confirm 0.8190 and 0.8552.
+
+## Fixing a committed virtual environment
+```powershell
+git rm -r --cached venv
+git commit -m "Stop tracking venv"
 ```
-- Every PR needs one review from a teammate (see the review rotation: A reviews C, B reviews A, C reviews B, D reviews all).
-- Small PRs, merged often. Write commit messages that say what changed; the history is our evidence of who did what.
-- Never commit `.venv/`, model caches, or large generated files.
-
-## Conflict avoidance in `factcheck.py`
-Only one file is submitted, so we share it. Agreed ownership by section:
-- A owns `WordRecallThresholdFactChecker` and the overlap helpers.
-- B owns `EntailmentModel`.
-- C owns `EntailmentFactChecker` and the passage cleaning/sentence splitting helpers.
-- Do not edit another member's section without telling them first.
+(`venv/` is already in `.gitignore`; the ignore file does not remove files that were committed earlier.)
 
 ## Freeze
-`factcheck.py` is frozen on **Sun 8 Nov**. After that only bug fixes found in clean-environment runs.
+`factcheck.py` is frozen once the final fresh-environment check has passed. After that only bug fixes found in clean-environment runs.

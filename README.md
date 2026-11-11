@@ -3,33 +3,38 @@
 Fact-checks LLM-generated biography facts against retrieved Wikipedia passages (FActScore setup).
 Predicts **S** (supported) or **NS** (not supported); the gold label **IR** is treated as **NS**.
 
-**Deadline:** Wed 11 Nov 2026, 23:59 (internal target: submit Tue 10 Nov).
-**Submit separately:** (1) PDF report, (2) `factcheck.py`.
-**Do not modify** `factchecking_main.py`.
+**Submit separately:** (1) the PDF report, (2) `factcheck.py`. Do not modify `factchecking_main.py`.
 
-| Part | What | Target |
-|---|---|---|
-| 1 | Word overlap (`--mode word_overlap`) | accuracy >= 75% |
-| 2 | DeBERTa-v3 entailment (`--mode entailment`) | accuracy >= 83% |
-| 3 | Error analysis PDF (10 FP + 10 FN, 2-4 categories) | see brief |
+## Results (221 development facts)
 
-## Data facts (checked)
-- `data/dev_labeled_ChatGPT.jsonl`: 31 lines -> **221 labelled facts** (S = 112, NS = 93, IR = 16).
-- Always predicting S gives about 50.7% (112/221), the number every method must beat.
-- `data/passages_bm25_ChatGPT_humfacts.jsonl`: 5,426 facts with passages (26 MB). Only the 221 dev facts are scored.
-- Passages contain `<s>` and `</s>` tags and are not sentence-aligned.
+| Part | System | Command | Accuracy | Target |
+|---|---|---|---|---|
+| 1 | Word overlap (precision, stopwords + Porter stemming, best passage, threshold 0.64) | `python factchecking_main.py --mode word_overlap` | 0.8190 (181/221) | >= 0.75 |
+| 2 | DeBERTa-v3 entailment (best sentence, threshold 0.36, overlap pruning cutoff 0.1) | `python factchecking_main.py --mode entailment` | 0.8552 (189/221) | >= 0.83 |
+| 3 | Error analysis of the Part 2 model | see report | n/a | 10 FP + 10 FN, 2-4 categories |
+
+Always predicting S scores 0.507 (112/221), the baseline. Entailment takes about 170 s on a CPU with pruning.
+Details: `docs/D_FINDINGS.md`, `docs/EXPERIMENT_LOG.md`, `experiments/`.
 
 ## Setup
-Python **3.10** is required (the brief says so). From the repo root:
+Python **3.10** is required.
 
-```bash
-./scripts/setup_env.sh          # creates .venv, installs pinned requirements, downloads NLTK/spaCy data
-source .venv/bin/activate
-python factchecking_main.py --mode always_entail      # sanity check, should be about 0.507
-python factchecking_main.py --mode entailment --cuda  # only if you have a CUDA GPU
+Windows (PowerShell), from the repo root:
+```powershell
+py -3.10 -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+python factchecking_main.py --mode always_entail    # sanity check, about 0.507
 ```
+Mac/Linux: `./scripts/setup_env.sh`, then `source .venv/bin/activate`.
 
-The first entailment run downloads `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli` from Hugging Face (needs internet).
+`factcheck.py` needs no downloads other than the Hugging Face model
+(`MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli`, downloaded on the first entailment run). The stopword list is hard-coded and
+sentence splitting uses a blank spaCy pipeline, so no NLTK or spaCy data is required.
+
+If the model download fails with `401 Unauthorized`, an expired Hugging Face token is saved on your machine: run
+`huggingface-cli logout` (or delete `~/.cache/huggingface/token`) and try again. The model is public.
 
 ## Repo layout
 ```
@@ -37,21 +42,19 @@ factcheck.py                 SUBMISSION FILE (the only code file we submit)
 factchecking_main.py         provided driver (DO NOT EDIT)
 requirements.txt             pinned packages
 data/                        provided datasets
-experiments/                 ablation tables, threshold sweeps, notes (cache/ is git-ignored)
-report/                      PDF report sources and final PDF
-docs/                        git workflow, interface contract, experiment log template
-scripts/                     setup_env.sh, check_submission.sh
+experiments/                 result tables, threshold sweeps, error lists, Part 1 experiment scripts
+docs/                        findings, experiment log, interfaces, git workflow
+scripts/                     setup_env.sh, check_submission.sh / check_submission.ps1
+report/                      report sources and the final PDF
+*.py in the repo root        Part 2 experiment scripts (pruning_sweep.py, threshold_experiment.py, dump_errors.py, ...)
 ```
+Do not commit `venv/` or `.venv/` (they are git-ignored).
 
 ## Rules
 1. **Do not edit `factchecking_main.py`.**
-2. `factcheck.py` must work with **only** the pinned packages. Do not rely on runtime downloads other than the HF model
-   (the NLTK/spaCy data you downloaded locally may not exist on the marker's machine). If you need a stopword list, hard-code it.
-3. Both commands must run end to end without errors or OOM, on CPU as well as GPU:
-   `python factchecking_main.py --mode word_overlap` and `python factchecking_main.py --mode entailment`.
-4. **GenAI policy: category 3, Editing only.** GenAI may be used only to improve wording or presentation of our own work,
-   not to write code, ideas or analysis. Include the acknowledgement statement in the report. Keep records of how the work was produced.
-5. Everyone must be able to explain every part of the code and report.
-
-See `docs/GIT_WORKFLOW.md` for branching and `docs/INTERFACES.md` for who owns what.
-Before submitting, run `./scripts/check_submission.sh` in a fresh environment.
+2. `factcheck.py` must work with the pinned packages only, on CPU as well as GPU, without errors or out-of-memory problems.
+3. Before submitting, run `scripts/check_submission.ps1` (Windows) or `scripts/check_submission.sh` in a fresh Python 3.10
+   environment. It must print 0.8190 and 0.8552.
+4. **GenAI:** the assessment is in the "Editing" category. Each member's use of GenAI is declared in the report's
+   acknowledgement section, using the template in the assessment brief.
+5. Everyone must be able to explain every part of the code and the report.

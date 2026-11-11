@@ -1,18 +1,16 @@
-# Interface contract (agree before coding)
+# Interfaces in the final `factcheck.py`
 
-Fill in the exact signatures at the first team meeting (Sun 25 Oct), then treat them as fixed.
-Everyone can then code against the agreed signature without waiting for another member.
+| Function / class | Signature | Used by |
+|---|---|---|
+| `preprocess` | `preprocess(text, lowercase=True, remove_stopwords=True, stem=True) -> List[str]` | Part 1 scoring, `overlap_score` |
+| `overlap_score` | `overlap_score(fact, text, metric="precision", **prep_kwargs) -> float` in [0, 1] | Part 1, optional pruning method `"content"` |
+| `WordRecallThresholdFactChecker` | `WordRecallThresholdFactChecker(threshold=0.64, metric="precision", lowercase=True, remove_stopwords=True, stem=True, pool_passages=False)`; `.score(fact, passages)`, `.predict(fact, passages) -> "S" or "NS"` | `--mode word_overlap` |
+| `EntailmentModel` | `check_entailment(premise, hypothesis)` returns the entailment, neutral and contradiction probabilities | `EntailmentFactChecker` |
+| `EntailmentFactChecker` | `EntailmentFactChecker(ent_model, entailment_threshold=0.36, overlap_cutoff=0.1, overlap_method="simple", clean_text=False)`; `.max_entailment_score(fact, passages, return_sentence=False)`, `.predict(fact, passages) -> "S" or "NS"` | `--mode entailment` |
 
-| Owner | Function / class | Signature (proposed, edit if the group agrees) | Used by |
-|---|---|---|---|
-| A | overlap score | `overlap_score(fact: str, text: str) -> float` in range 0..1 | A (word overlap), C (pruning) |
-| B | entailment probabilities | `EntailmentModel.check_entailment(premise, hypothesis) -> (p_entail, p_neutral, p_contra)` | C |
-| C | passage cleaning / splitting | `split_passage(text: str) -> List[str]` | C, B (timing tests) |
-| C | decision rule | `EntailmentFactChecker.predict(fact, passages) -> "S" or "NS"` | main driver |
-
-## Working without waiting on others
-- **Stubs first.** A pushes a minimal `overlap_score` by Mon 26 Oct and refines it later without changing the signature.
-  B pushes a placeholder `check_entailment` (fixed probabilities) so C can build the full pipeline straight away.
-- **Cache entailment scores** to `experiments/cache/` (git-ignored) so threshold tuning does not re-run the model.
-- **D's tooling** (script that lists false positives/negatives from any prediction file) is built on Part 1 predictions first,
-  then re-run on the final entailment predictions.
+Notes
+- The pruning in `EntailmentFactChecker` defaults to the `"simple"` overlap (lower-cased words, stopwords kept). Part 1's `overlap_score`
+  is available as `overlap_method="content"`. It was tested and rejected as the default because it skipped more sentences and lost accuracy
+  (see `docs/D_FINDINGS.md`).
+- `clean_text=False` keeps the `<s>` and `</s>` tags. Removing them lowered accuracy in every setup tested.
+- `max_entailment_score(..., return_sentence=True)` also returns the best-scoring sentence, used by the error-analysis scripts.

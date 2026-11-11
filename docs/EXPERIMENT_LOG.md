@@ -3,9 +3,32 @@
 Record every experiment so the report can justify each design decision. One row per run.
 
 ## Part 1: word overlap
+
+Scripts: `experiments/part1_ablation.py`, `experiments/part1_extra_experiments.py` (and the metrics harness on the `metrics-and-evaluation-harness` branch).
+
+## Part 1: word overlap
 | Date | Who | Tokenization | Stopwords | Stemming | Metric | Threshold | Accuracy | Notes |
 |---|---|---|---|---|---|---|---|---|
-| | | | | | | | | |
+| Oct-Nov 2026 | A | Letters + digits (regex) | Hard-coded full list | Porter | Precision, best passage | 0.64 | 0.8190 (181/221) | **Final.** Plateau 0.61-0.66. TP 94, FN 18, FP 22, TN 87 |
+| | A | same | none | Porter | Precision | 0.75 | 0.792 | Stopwords off: -2.7 points |
+| | A | same | full | none | Precision | 0.64 | 0.787 | Stemming off: -3.2 points |
+| | A | same, lowercase off | full | Porter | Precision | 0.64 | 0.8190 | No change: the Porter stemmer lowercases words itself |
+| | A | same | full | none, lowercase on / off | Precision | n/a | 0.787 / 0.778 | Lowercasing helps by about 1 point once the stemmer is off |
+| | A | same | full | Porter | Precision, passages pooled | 0.71 | 0.796 | Pooling is 2.3 points worse than the best passage |
+| | A | same | full | Porter | Jaccard | 0.03 | 0.697 | Passage length dominates the union |
+| | A | same | full | Porter | Dice | 0.06 | 0.692 | Same reason as Jaccard |
+| | A | Letters only (digits dropped) | full | Porter | Precision | n/a | 0.792 | Digits matter: -2.7 points |
+| | A | Whitespace + strip punctuation | full | Porter | Precision | n/a | 0.810 | |
+| | A | Letters, digits, apostrophe words | full | Porter | Precision | n/a | 0.824 | One fact better: within noise |
+| | A | Letters + digits | small (about 25 words) | Porter | Precision | n/a | 0.824 | One fact better: within noise |
+| | A | same | full | Snowball / WordNet lemmatizer | Precision | n/a | 0.819 / 0.801 | Stemming beats lemmatization |
+| | A | same | full | Porter | IDF-weighted precision | n/a | 0.828 | Two facts better: within noise, not adopted |
+| | A | same | full | Porter | Best single sentence / 2-sentence window | n/a | 0.774 / 0.810 | Context is needed |
+| | A | same | full | Porter | Bigram / unigram+bigram average | n/a | 0.715 / 0.774 | Too strict for short facts |
+| | B | same | full | Porter | ROUGE-L precision | 0.64 | 0.8054 (178/221) | Word order does not help |
+| | B | ROUGE tokenizer on raw text | ROUGE default | ROUGE stemmer | ROUGE-1 precision | 0.77 | 0.7919 (175/221) | Our preprocessing helps a standard metric too |
+| | B | same | full | Porter | TF-IDF cosine | 0.10 | 0.6606 (146/221) | Length normalisation hurts |
+| | A | grouped cross-validation (5 folds by person, 30 repeats) | | | Precision | chosen per fold | 0.808 +- 0.015 | 95% bootstrap interval 0.769-0.869 |
 
 ## Part 2: entailment
 | Date | Who | Sentence unit | Pruning cutoff | Decision rule | Threshold | Accuracy | Runtime (CPU/GPU) | Notes |

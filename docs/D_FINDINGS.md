@@ -92,7 +92,8 @@ Working notes for the report. All numbers are on the 221 dev facts (S = 112, NS 
 - [ ] Final submission check and upload
 
 ### Repo / team
-- [ ] `main` still has only the initial repo. The final `factcheck.py` is Thisumi's, on `text-entailment` (identical copy on `pruning`).
-- [ ] Pull request into `main`
-- [ ] Sanuli's branch needs fixing before merge (duplicate repo folder, committed `venv/`, based on `main`)
-- [ ] Report not started in the repo
+- [x] Branches `word-overlap`, `metrics-and-evaluation-harness`, `text-entailment` and `pruning` are merged into `main`
+- [ ] `main`'s `factcheck.py` still has the duplicated Part 1 block (447 lines). Replace it with the clean 347-line version: `git checkout origin/pruning -- factcheck.py`
+- [ ] Remove the committed `venv/` (1,432 files) and the duplicate `CM3604-Factcheck-word-overlap/` folder from `main` (the problems flagged earlier on Sanuli's branch)
+- [ ] Re-run `scripts/check_submission.ps1` on `main` after the fix: it must print 0.8190 and 0.8552
+- [ ] Report: Part 1 section drafted (combined from `word-overlap` and `metrics-and-evaluation-harness`); Parts 2 and 3 and the GenAI acknowledgement still to be added
