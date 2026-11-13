@@ -1,18 +1,24 @@
 """
 tally_categories.py  (robust version)
 
-After you fill the 'your_category' column of error_sample.csv by hand, run:
-    python tally_categories.py
-Prints how many of the examined errors fall in each category (split by false
-positive / false negative) and saves category_counts.csv for the report table.
+Counts how many of the 20 examined errors fall in each hand-assigned category (split by
+false positive / false negative) and saves category_counts.csv for the report table.
+
+Run apply_labels.py first (it creates error_sample_labelled.csv), then:
+    python tally_categories.py   (from anywhere inside the project)
+Reads and writes in experiments/part2/results/.
 """
 
 import csv
 import io
 import sys
 from collections import Counter
+from pathlib import Path
 
-SAMPLE_FILE = "error_sample_labelled.csv"      # use error_sample_enriched.csv if that is the one you labelled
+ROOT = next(p for p in Path(__file__).resolve().parents if (p / "factcheck.py").exists())
+RESULTS = ROOT / "experiments" / "part2" / "results"
+
+SAMPLE_FILE = RESULTS / "error_sample_labelled.csv"
 
 # --- read the file, coping with Excel's UTF-8 marker and ; or tab delimiters
 with open(SAMPLE_FILE, encoding="utf-8-sig", newline="") as f:
@@ -69,7 +75,7 @@ for cat in categories:
 print("-" * 90)
 print(f"{'All examined':<40}{totals['False Positive']:>16}{totals['False Negative']:>16}{len(rows):>8}{'100%':>10}")
 
-with open("category_counts.csv", "w", newline="", encoding="utf-8") as f:
+with open(RESULTS / "category_counts.csv", "w", newline="", encoding="utf-8") as f:
     writer = csv.DictWriter(f, fieldnames=list(out[0].keys()))
     writer.writeheader()
     writer.writerows(out)

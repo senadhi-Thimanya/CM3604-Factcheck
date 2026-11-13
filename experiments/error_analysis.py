@@ -11,7 +11,8 @@ factcheck.py) and prepares everything needed for Part 3:
                             answers, false positives and false negatives
   run_stats.txt             time and GPU memory for the report's efficiency section
 
-Run:  python error_analysis.py
+Run:  python error_analysis.py   (from anywhere inside the project)
+Output goes to experiments/part2/results/
 """
 
 import csv
@@ -22,7 +23,12 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# find the project root (the folder that holds factcheck.py), wherever this script is saved
+ROOT = next(p for p in Path(__file__).resolve().parents if (p / "factcheck.py").exists())
+sys.path.insert(0, str(ROOT))
+os.chdir(ROOT)                                    # data/ paths below are relative to the project root
+RESULTS = ROOT / "experiments" / "part2" / "results"
+RESULTS.mkdir(parents=True, exist_ok=True)        # all csv/txt output goes here
 
 import torch
 from tqdm import tqdm
@@ -206,7 +212,7 @@ extra_fields = [
 ] + FEATURE_NAMES
 all_fields = base_fields + extra_fields
 
-with open("error_analysis.csv", "w", newline="", encoding="utf-8") as file:
+with open(RESULTS / "error_analysis.csv", "w", newline="", encoding="utf-8") as file:
     writer = csv.DictWriter(file, fieldnames=all_fields)
     writer.writeheader()
     writer.writerows(errors)
@@ -224,12 +230,12 @@ sample = (
 for e in sample:
     e["your_category"] = ""      # fill in by hand
 
-sample_file = "error_sample.csv"
+sample_file = RESULTS / "error_sample.csv"
 if os.path.exists(sample_file):
     with open(sample_file, newline="", encoding="utf-8") as f:
         already_labelled = any(r.get("your_category", "").strip() for r in csv.DictReader(f))
     if already_labelled:
-        sample_file = "error_sample_enriched.csv"
+        sample_file = RESULTS / "error_sample_enriched.csv"
         print("\nWARNING: error_sample.csv already has your categories, so it was NOT overwritten.")
         print(f"The new version with extra columns is saved as {sample_file}.")
 
@@ -259,7 +265,7 @@ for name in FEATURE_NAMES:
     summary_rows.append(row)
     print(line)
 
-with open("error_feature_summary.csv", "w", newline="", encoding="utf-8") as f:
+with open(RESULTS / "error_feature_summary.csv", "w", newline="", encoding="utf-8") as f:
     writer = csv.DictWriter(f, fieldnames=["pattern"] + groups)
     writer.writeheader()
     writer.writerows(summary_rows)
@@ -290,8 +296,8 @@ stats = [
     f"Time for {len(examples)} facts: {elapsed:.1f} s ({elapsed / len(examples):.2f} s per fact)",
     f"Peak GPU memory: {peak_mb:.0f} MB" if peak_mb is not None else "Peak GPU memory: n/a (CPU run)",
 ]
-with open("run_stats.txt", "w", encoding="utf-8") as f:
+with open(RESULTS / "run_stats.txt", "w", encoding="utf-8") as f:
     f.write("\n".join(stats) + "\n")
 
 print("\n" + "\n".join(stats))
-print("\nSaved: error_analysis.csv, " + sample_file + ", error_feature_summary.csv, run_stats.txt")
+print("\nSaved: error_analysis.csv, " + sample_file.name + ", error_feature_summary.csv, run_stats.txt")

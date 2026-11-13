@@ -12,8 +12,8 @@ Experiments
   4. Cleaning:   raw text vs. cleaned text vs. split-on-<s>-tags-then-clean vs. whitespace-only vs. markup-removal
   5. Validation: tune the threshold on one random half, test on the other half (100 splits)
 
-Run:  python ablation.py
-Output: ablation_strategy.csv, ablation_threshold.csv, ablation_pruning.csv,
+Run:  python ablation.py   (from anywhere inside the project)
+Output (in experiments/part2/results/): ablation_strategy.csv, ablation_threshold.csv, ablation_pruning.csv,
         ablation_cleaning.csv, ablation_split_half.csv, ablation_cache.pkl
 (Delete ablation_cache.pkl if you change MODEL_NAME or the data.)
 """
@@ -26,7 +26,12 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# find the project root (the folder that holds factcheck.py), wherever this script is saved
+ROOT = next(p for p in Path(__file__).resolve().parents if (p / "factcheck.py").exists())
+sys.path.insert(0, str(ROOT))
+os.chdir(ROOT)                                    # data/ paths below are relative to the project root
+RESULTS = ROOT / "experiments" / "part2" / "results"
+RESULTS.mkdir(parents=True, exist_ok=True)        # all csv/txt output goes here
 
 import numpy as np
 import torch
@@ -199,7 +204,7 @@ for name, fn in STRATEGIES.items():
     thr, acc = tune(scores, grid_for(name))
     rows.append({"strategy": name, "best_threshold": thr, "best_accuracy": round(acc, 4),
                  "correct_of_total": f"{int(round(acc * len(gold)))}/{len(gold)}"})
-write_csv("ablation_strategy.csv", rows)
+write_csv(RESULTS / "ablation_strategy.csv", rows)
 show("1. DECISION STRATEGY (raw text, overlap cutoff 0.1)", rows)
 
 # ------------------------------------------------------------------ 2. threshold sweep
@@ -209,7 +214,7 @@ rows = [{"threshold": round(float(t), 2), "accuracy": round(acc_at(main_scores, 
         for t in np.arange(0.10, 0.90, 0.02)]
 rows.append({"threshold": FINAL_THRESHOLD, "accuracy": round(acc_at(main_scores, FINAL_THRESHOLD), 4)})
 rows.sort(key=lambda r: r["threshold"])
-write_csv("ablation_threshold.csv", rows)
+write_csv(RESULTS / "ablation_threshold.csv", rows)
 show(f"2. THRESHOLD SWEEP ({MAIN_STRATEGY}); final threshold = {FINAL_THRESHOLD}", rows)
 
 # ------------------------------------------------------------------ 3. pruning
@@ -227,7 +232,7 @@ for cutoff in CUTOFFS:
         "pct_skipped": round(100 * (1 - checked / total_sentences), 1),
         "est_seconds": round(checked * sec_per_sentence, 1),
     })
-write_csv("ablation_pruning.csv", rows)
+write_csv(RESULTS / "ablation_pruning.csv", rows)
 show(f"3. PRUNING (raw text; {total_sentences} sentences in total; {sec_per_sentence:.3f} s per sentence)", rows)
 
 # ------------------------------------------------------------------ 4. cleaning
@@ -237,7 +242,7 @@ for variant in ("raw", "clean", "tag_split", "ws_only", "markup"):
     thr, best_acc = tune(scores, grid_for(MAIN_STRATEGY))
     rows.append({"text_handling": variant, f"acc_at_{FINAL_THRESHOLD}": round(acc_at(scores, FINAL_THRESHOLD), 4),
                  "best_threshold": thr, "best_acc": round(best_acc, 4)})
-write_csv("ablation_cleaning.csv", rows)
+write_csv(RESULTS / "ablation_cleaning.csv", rows)
 show("4. TEXT CLEANING (overlap cutoff 0.1)", rows)
 
 # ------------------------------------------------------------------ 5. split-half validation
@@ -254,11 +259,12 @@ rows = [{"mean_test_accuracy": round(float(np.mean(test_accs)), 4),
          "std": round(float(np.std(test_accs)), 4),
          "mean_chosen_threshold": round(float(np.mean(chosen)), 3),
          "threshold_std": round(float(np.std(chosen)), 3)}]
-write_csv("ablation_split_half.csv", rows)
+write_csv(RESULTS / "ablation_split_half.csv", rows)
 show("5. SPLIT-HALF VALIDATION (tune on one half, test on the other; 200 runs)", rows)
 
 print("\nSaved: ablation_strategy.csv, ablation_threshold.csv, ablation_pruning.csv, "
       "ablation_cleaning.csv, ablation_split_half.csv")
+
 
 # ------------------------------------------------------------------ 6. which facts change prediction?
 raw_pred = best_scores(records["raw"], main_fn, FINAL_CUTOFF) >= FINAL_THRESHOLD
@@ -267,5 +273,4 @@ for v in ("ws_only", "markup"):
     changed = np.where(raw_pred != pred)[0]
     print(f"\n6. {v}: {len(changed)} facts change prediction compared with raw text")
     for i in changed:
-        print(
-            f"   {examples[i].fact} | gold {'S' if gold[i] else 'NS'} | raw {'S' if raw_pred[i] else 'NS'} -> {v} {'S' if pred[i] else 'NS'}")
+        print(f"   {examples[i].fact} | gold {'S' if gold[i] else 'NS'} | raw {'S' if raw_pred[i] else 'NS'} -> {v} {'S' if pred[i] else 'NS'}")
