@@ -1,7 +1,24 @@
+"""
+threshold_experiment.py
+
+Runs the final entailment checker once over the development set, then evaluates a sweep of
+decision thresholds (accuracy, F1 for S and NS, confusion matrix counts).
+
+Run:  python threshold_experiment.py   (from anywhere inside the project)
+Output: experiments/part2/results/threshold_results.csv  (read by make_charts.py)
+"""
+
+import csv
+import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# find the project root (the folder that holds factcheck.py), wherever this script is saved
+ROOT = next(p for p in Path(__file__).resolve().parents if (p / "factcheck.py").exists())
+sys.path.insert(0, str(ROOT))
+os.chdir(ROOT)                                    # data/ paths below are relative to the project root
+RESULTS = ROOT / "experiments" / "part2" / "results"
+RESULTS.mkdir(parents=True, exist_ok=True)
 
 import numpy as np
 import torch
@@ -41,7 +58,7 @@ model.to(device)
 ent_model = EntailmentModel(model, tokenizer, cuda=(device.type == "cuda"))
 print(f"Using device: {device}")
 
-# Use the SAME checker (and pruning) as the final factcheck.py
+# Use the SAME checker (and pruning and noise removal) as the final factcheck.py
 checker = EntailmentFactChecker(ent_model)
 
 
@@ -123,10 +140,11 @@ print("=" * 40)
 print("Threshold:", best_f1["threshold"])
 print("Macro F1:", round((best_f1["s_f1"] + best_f1["ns_f1"]) / 2, 4))
 
-import csv
-with open("threshold_results.csv", "w", newline="") as f:
+out_file = RESULTS / "threshold_results.csv"
+with open(out_file, "w", newline="", encoding="utf-8") as f:
     w = csv.writer(f)
     w.writerow(["threshold", "accuracy", "s_f1", "ns_f1", "tp", "fn", "fp", "tn"])
     for r in results:
         w.writerow([r["threshold"], r["accuracy"], r["s_f1"], r["ns_f1"],
                     r["tp"], r["fn"], r["fp"], r["tn"]])
+print(f"\nSaved {out_file}")
