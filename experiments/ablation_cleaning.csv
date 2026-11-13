@@ -1,0 +1,6 @@
+text_handling,acc_at_0.36,best_threshold,best_acc
+raw,0.8552,0.36,0.8552
+clean,0.8281,0.44,0.8326
+tag_split,0.8281,0.33,0.8326
+ws_only,0.8552,0.36,0.8552
+markup,0.8552,0.36,0.8552
