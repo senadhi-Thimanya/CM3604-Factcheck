@@ -36,7 +36,7 @@ class EntailmentModel(object):
         self.model.eval()
         self.id2label = self.model.config.id2label
 
-        # Build the label mapping ONCE here, not on every call
+        # find the index of each label once here, not on every call
         self.label_mapping = {}
         for index, label in self.id2label.items():
             label = label.lower()
@@ -56,7 +56,7 @@ class EntailmentModel(object):
     def check_entailment(self, premise: str, hypothesis: str):
         with torch.inference_mode():
 
-            # Tokenize the evidence (premise) and the fact (hypothesis)
+            # premise goes first, the fact (hypothesis) second
             inputs = self.tokenizer(
                 premise,
                 hypothesis,
@@ -65,19 +65,18 @@ class EntailmentModel(object):
                 max_length=512
             )
 
-            # Move inputs to the same device as the model (GPU or CPU)
+            # inputs need to be on the same device as the model
             device = self.model.device
             inputs = {key: value.to(device) for key, value in inputs.items()}
 
-            # Run the NLI model
             outputs = self.model(**inputs)
 
-            # Convert logits into probabilities
+            # logits -> probabilities
             probabilities = torch.softmax(
                 outputs.logits, dim=-1
             )[0].cpu().tolist()
 
-        # Return probabilities using meaningful class names
+        # return the probabilities by label name so the label order in the model config doesn't matter
         return {
             label: float(probabilities[index])
             for label, index in self.label_mapping.items()
@@ -111,10 +110,10 @@ class AlwaysEntailedFactChecker(FactChecker):
 
 
 # ---------------------------------------------------------------------------
-# Part 1: word overlap (preprocessing + scoring)
+# Part 1: word overlap
 # ---------------------------------------------------------------------------
 
-# Hard-coded so we do not depend on nltk.download() having been run on the marker's machine.
+# hard-coded so we don't need nltk.download() to have been run on the marker's machine
 STOPWORDS = frozenset("""
 a about above after again against all am an and any are aren as at be because been before being below between both
 but by can cannot could couldn d did didn do does doesn doing don down during each few for from further had hadn has
@@ -125,13 +124,14 @@ this those through to too under until up ve very was wasn we were weren what whe
 with won would wouldn y you your yours yourself yourselves also
 """.split())
 
-_TAG_RE = re.compile(r"</?s>")           # sentence tags present in the retrieved passages
-_TOKEN_RE = re.compile(r"[^\W_]+")        # runs of letters/digits (keeps years such as 1950)
+_TAG_RE = re.compile(r"</?s>")           # the <s> and </s> tags in the passages
+_TOKEN_RE = re.compile(r"[^\W_]+")        # letters and digits, so years like 1950 stay in
 _stemmer = PorterStemmer()
 _stem_cache = {}
 
 
 def _stem(word: str) -> str:
+    # stemming is slow-ish and the same words come up a lot, so cache it
     stemmed = _stem_cache.get(word)
     if stemmed is None:
         stemmed = _stemmer.stem(word)
@@ -141,7 +141,7 @@ def _stem(word: str) -> str:
 
 def preprocess(text: str, lowercase: bool = True, remove_stopwords: bool = True, stem: bool = True) -> List[str]:
     """
-    Turns raw text into a list of tokens. Each step can be switched off so it can be ablated.
+    Text -> list of tokens. Every step has a flag so we could switch it off for the ablation.
     """
     text = _TAG_RE.sub(" ", text)
     if lowercase:
@@ -156,10 +156,10 @@ def preprocess(text: str, lowercase: bool = True, remove_stopwords: bool = True,
 
 def overlap_from_tokens(fact_tokens, passage_tokens, metric: str = "precision") -> float:
     """
-    Bag-of-words (set) overlap between a fact and a passage, as a score in [0, 1].
-    precision: |F & P| / |F|   (fraction of the fact's words found in the passage)
-    jaccard:   |F & P| / |F | P|
-    dice:      2|F & P| / (|F| + |P|)
+    Set overlap between a fact and a passage, gives a score between 0 and 1.
+    precision: |F and P| / |F|, so the share of the fact's words that are in the passage
+    jaccard:   |F and P| / |F or P|
+    dice:      2 * |F and P| / (|F| + |P|)
     """
     fact_set, passage_set = set(fact_tokens), set(passage_tokens)
     if not fact_set or not passage_set:
@@ -176,15 +176,15 @@ def overlap_from_tokens(fact_tokens, passage_tokens, metric: str = "precision") 
 
 def overlap_score(fact: str, text: str, metric: str = "precision", **prep_kwargs) -> float:
     """
-    Agreed interface: overlap_score(fact, text) -> float in [0, 1]. Used by Part 1 and for pruning in Part 2.
+    Preprocesses both strings and returns their overlap score. Handy for quick checks and the experiment scripts.
     """
     return overlap_from_tokens(preprocess(fact, **prep_kwargs), preprocess(text, **prep_kwargs), metric)
 
 
 class WordRecallThresholdFactChecker(FactChecker):
     """
-    Predicts S if the best word-overlap score between the fact and any retrieved passage reaches a threshold.
-    pool_passages=True instead compares the fact against the union of the words of all passages.
+    Says S if the best overlap score between the fact and any one passage is at least the threshold.
+    With pool_passages=True it compares the fact to the words of all the passages put together instead.
     """
     def __init__(self, threshold: float = 0.64, metric: str = "precision", lowercase: bool = True,
                  remove_stopwords: bool = True, stem: bool = True, pool_passages: bool = False):
@@ -195,6 +195,7 @@ class WordRecallThresholdFactChecker(FactChecker):
         self._passage_cache = {}
 
     def _passage_tokens(self, text: str):
+        # the same passages are retrieved for many facts, so only preprocess each one once
         tokens = self._passage_cache.get(text)
         if tokens is None:
             tokens = set(preprocess(text, **self.prep))
@@ -219,15 +220,15 @@ class WordRecallThresholdFactChecker(FactChecker):
 # ---------------------------------------------------------------------------
 
 _SPACE_RE = re.compile(r"\s+")
-_SENTENCE_TAG_RE = re.compile(r"</?s>")     # kept separate so Part 2 does not depend on Part 1 code
+_SENTENCE_TAG_RE = re.compile(r"</?s>")     # separate from Part 1 so Part 2 doesn't depend on it
 
 
 def clean_passage(text: str) -> str:
     """
-       Tested alternative, NOT used in the final system: drops the <s> / </s> sentence tags and
-       collapses whitespace. It lowered accuracy from 85.5% to 82.8% (83.3% after re-tuning the
-       threshold), so the final system uses remove_noise() below, which keeps the tags.
-       """
+    NOT used in the final system. Removes the <s> / </s> tags and collapses whitespace.
+    Accuracy went from 85.5% down to 82.8% (83.3% after re-tuning the threshold), so
+    remove_noise() below is used instead.
+    """
     text = _SENTENCE_TAG_RE.sub(" ", text)
     return _SPACE_RE.sub(" ", text).strip()
 
@@ -236,15 +237,15 @@ _MARKUP_RE = re.compile(r"\{\{.*?(?:\}\}|(?=</s>)|$)", re.S)
 
 def remove_noise(text: str) -> str:
     """
-    Removes leftover wiki markup (e.g. '{{cite news|...') and collapses repeated whitespace.
-    The <s> / </s> sentence tags are KEPT: removing them lowered accuracy from 85.5% to 82.8%.
+    Removes leftover wiki markup (like '{{cite news|...') and extra whitespace.
+    The <s> / </s> tags stay in, taking them out dropped accuracy from 85.5% to 82.8%.
     """
     return _SPACE_RE.sub(" ", _MARKUP_RE.sub(" ", text)).strip()
 
 class EntailmentFactChecker(FactChecker):
     """
-    Predicts S when the best entailment probability over all sentences of all retrieved passages
-    reaches a threshold. Sentences with very low word overlap with the fact are pruned  (skipped).
+    Says S if the highest entailment probability over all the sentences in the retrieved passages is
+    at least the threshold. Sentences that share almost no words with the fact are skipped to save time.
     """
 
     def __init__(self, ent_model, entailment_threshold: float = 0.36, overlap_cutoff: float = 0.1,
@@ -252,33 +253,32 @@ class EntailmentFactChecker(FactChecker):
 
         self.ent_model = ent_model
 
-        # Lightweight rule-based sentence splitter (no model download needed)
+        # rule-based sentence splitter, so there's no model to download
         self.nlp = spacy.blank("en")
         self.nlp.add_pipe("sentencizer")
 
-        # Predict S when the best entailment probability is at least this value
+        # S if the best entailment probability is at least this
         self.entailment_threshold = entailment_threshold
 
-        # Skip sentences whose word overlap with the fact is below this (0.0 = pruning off)
+        # skip sentences with less overlap than this (0.0 turns pruning off)
         self.overlap_cutoff = overlap_cutoff
 
-        # "simple":  share of the fact's lower-cased words that appear in the sentence
-        # "content": the Part 1 overlap (stop words removed, stemmed)
+        # "simple": share of the fact's lowercased words that are in the sentence
+        # "content": the Part 1 overlap (no stopwords, stemmed). Not used in the final run.
         self.overlap_method = overlap_method
 
-        # Noise removal: strips leftover wiki markup (e.g. "{{cite news|...") and extra whitespace,
-        # but KEEPS the <s> / </s> sentence tags. Removing the tags as well cost 2.7 accuracy points
-        # (183/221 = 82.8% vs 189/221 = 85.5%); this milder version scores 189/221.
+        # removes wiki markup and extra spaces but keeps the <s> / </s> tags. Taking the tags out
+        # as well gave 183/221 (82.8%) instead of 189/221 (85.5%).
         self.clean_text = clean_text
 
-        # How many sentences went to the model and how many were pruned
+        # counters for how many sentences were sent to the model and how many were skipped
         self.checked_count = 0
         self.skipped_count = 0
 
     def _overlap(self, fact: str, sentence: str) -> float:
         if self.overlap_method == "content":
             fact_tokens = preprocess(fact)
-            if not fact_tokens:          # fact made only of stop words: do not prune
+            if not fact_tokens:          # fact is only stopwords, don't prune it
                 return 1.0
             return overlap_from_tokens(fact_tokens, preprocess(sentence), "precision")
 
@@ -303,7 +303,7 @@ class EntailmentFactChecker(FactChecker):
                 if not sentence:
                     continue
 
-                # Pruning: very low word overlap means entailment is very unlikely
+                # very low overlap means entailment is very unlikely, so skip the model here
                 if self._overlap(fact, sentence) < self.overlap_cutoff:
                     self.skipped_count += 1
                     continue
