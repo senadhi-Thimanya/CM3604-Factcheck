@@ -13,7 +13,7 @@ Experiments
   5. Validation: tune the threshold on one random half, test on the other half (100 splits)
 
 Run:  python ablation.py   (from anywhere inside the project)
-Output (in experiments/part2/results/): ablation_strategy.csv, ablation_threshold.csv, ablation_pruning.csv,
+Output (in experiments/): ablation_strategy.csv, ablation_threshold.csv, ablation_pruning.csv,
         ablation_cleaning.csv, ablation_split_half.csv, ablation_cache.pkl
 (Delete ablation_cache.pkl if you change MODEL_NAME or the data.)
 """
@@ -30,7 +30,7 @@ from pathlib import Path
 ROOT = next(p for p in Path(__file__).resolve().parents if (p / "factcheck.py").exists())
 sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)                                    # data/ paths below are relative to the project root
-RESULTS = ROOT / "experiments" / "part2" / "results"
+RESULTS = ROOT / "experiments"
 RESULTS.mkdir(parents=True, exist_ok=True)        # all csv/txt output goes here
 
 import numpy as np
@@ -45,7 +45,7 @@ from factchecking_main import read_passages, read_fact_examples
 MODEL_NAME = "MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli"
 LABELS_PATH = "data/dev_labeled_ChatGPT.jsonl"
 PASSAGES_PATH = "data/passages_bm25_ChatGPT_humfacts.jsonl"
-CACHE_FILE = "ablation_cache.pkl"
+CACHE_FILE = RESULTS / "ablation_cache.pkl"
 SEED = 42
 
 FINAL_THRESHOLD = 0.36      # values used in factcheck.py
